@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Cyphera.Kmip</RootNamespace>
+    <PackageId>Cyphera.Kmip</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Horizon Digital Engineering LLC</Authors>
+    <Description>KMIP client for .NET -- connect to any KMIP-compliant key management server</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/cyphera-labs/kmip-dotnet</RepositoryUrl>
+    <PackageTags>kmip;key-management;kms;mtls;encryption;thales;ciphertrust;hsm</PackageTags>
+  </PropertyGroup>
+
+</Project>
