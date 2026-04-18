@@ -15,3 +15,54 @@ jobs:
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
       - run: dotnet test --configuration Release
+
+  integration:
+    name: Integration Tests (PyKMIP)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Generate mTLS certificates
+        run: |
+          mkdir -p /tmp/kmip-certs
+          # CA
+          openssl req -x509 -newkey rsa:2048 -keyout /tmp/kmip-certs/ca-key.pem \
+            -out /tmp/kmip-certs/ca.pem -days 1 -nodes -subj "/CN=Test-CA"
+          # Server
+          openssl req -newkey rsa:2048 -keyout /tmp/kmip-certs/server-key.pem \
+            -out /tmp/kmip-certs/server.csr -nodes -subj "/CN=localhost"
+          openssl x509 -req -in /tmp/kmip-certs/server.csr \
+            -CA /tmp/kmip-certs/ca.pem -CAkey /tmp/kmip-certs/ca-key.pem \
+            -CAcreateserial -out /tmp/kmip-certs/server.pem -days 1 \
+            -extfile <(printf "subjectAltName=DNS:localhost,IP:127.0.0.1")
+          # Client
+          openssl req -newkey rsa:2048 -keyout /tmp/kmip-certs/client-key.pem \
+            -out /tmp/kmip-certs/client.csr -nodes -subj "/CN=test-client"
+          openssl x509 -req -in /tmp/kmip-certs/client.csr \
+            -CA /tmp/kmip-certs/ca.pem -CAkey /tmp/kmip-certs/ca-key.pem \
+            -CAcreateserial -out /tmp/kmip-certs/client.pem -days 1
+          chmod 644 /tmp/kmip-certs/*
+
+      - name: Start PyKMIP server
+        run: |
+          docker run -d --name pykmip \
+            -p 5696:5696 \
+            -v /tmp/kmip-certs:/certs \
+            altmannmarcelo/kmip:latest
+          for i in $(seq 1 30); do
+            if docker logs pykmip 2>&1 | grep -q "started"; then break; fi
+            sleep 1
+          done
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0"
+
+      - name: Run integration tests
+        run: dotnet test --configuration Release --filter "Category=Integration"
+        env:
+          KMIP_HOST: localhost
+          KMIP_PORT: "5696"
+          KMIP_CLIENT_CERT: /tmp/kmip-certs/client.pem
+          KMIP_CLIENT_KEY: /tmp/kmip-certs/client-key.pem
+          KMIP_CA_CERT: /tmp/kmip-certs/ca.pem
