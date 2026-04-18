@@ -53,7 +53,7 @@ public class OperationTests
     [Fact] public void Get()      => Assert.Equal(0x0000000Au, KmipOperation.Get);
     [Fact] public void Activate() => Assert.Equal(0x00000012u, KmipOperation.Activate);
     [Fact] public void Destroy()  => Assert.Equal(0x00000014u, KmipOperation.Destroy);
-    [Fact] public void Check()    => Assert.Equal(0x0000001Cu, KmipOperation.Check);
+    [Fact] public void Check()    => Assert.Equal(0x00000009u, KmipOperation.Check);
 
     [Fact]
     public void NoDuplicateValues()

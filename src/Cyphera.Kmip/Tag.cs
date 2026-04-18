@@ -67,7 +67,7 @@ public static class KmipOperation
     public const uint Get      = 0x0000000A;
     public const uint Activate = 0x00000012;
     public const uint Destroy  = 0x00000014;
-    public const uint Check    = 0x0000001C;
+    public const uint Check    = 0x00000009;
 }
 
 /// <summary>KMIP object types.</summary>
