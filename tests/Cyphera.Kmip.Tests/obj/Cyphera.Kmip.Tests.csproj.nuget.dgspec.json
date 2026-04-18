@@ -1,0 +1,132 @@
+{
+  "format": 1,
+  "restore": {
+    "/Users/lgutschow/workspace/_github/cyphera-labs/kmip-dotnet/tests/Cyphera.Kmip.Tests/Cyphera.Kmip.Tests.csproj": {}
+  },
+  "projects": {
+    "/Users/lgutschow/workspace/_github/cyphera-labs/kmip-dotnet/src/Cyphera.Kmip/Cyphera.Kmip.csproj": {
+      "version": "0.1.0",
+      "restore": {
+        "projectUniqueName": "/Users/lgutschow/workspace/_github/cyphera-labs/kmip-dotnet/src/Cyphera.Kmip/Cyphera.Kmip.csproj",
+        "projectName": "Cyphera.Kmip",
+        "projectPath": "/Users/lgutschow/workspace/_github/cyphera-labs/kmip-dotnet/src/Cyphera.Kmip/Cyphera.Kmip.csproj",
+        "packagesPath": "/Users/lgutschow/.nuget/packages/",
+        "outputPath": "/Users/lgutschow/workspace/_github/cyphera-labs/kmip-dotnet/src/Cyphera.Kmip/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/Users/lgutschow/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/8.0.100/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "/Users/lgutschow/workspace/_github/cyphera-labs/kmip-dotnet/tests/Cyphera.Kmip.Tests/Cyphera.Kmip.Tests.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/Users/lgutschow/workspace/_github/cyphera-labs/kmip-dotnet/tests/Cyphera.Kmip.Tests/Cyphera.Kmip.Tests.csproj",
+        "projectName": "Cyphera.Kmip.Tests",
+        "projectPath": "/Users/lgutschow/workspace/_github/cyphera-labs/kmip-dotnet/tests/Cyphera.Kmip.Tests/Cyphera.Kmip.Tests.csproj",
+        "packagesPath": "/Users/lgutschow/.nuget/packages/",
+        "outputPath": "/Users/lgutschow/workspace/_github/cyphera-labs/kmip-dotnet/tests/Cyphera.Kmip.Tests/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/Users/lgutschow/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "/Users/lgutschow/workspace/_github/cyphera-labs/kmip-dotnet/src/Cyphera.Kmip/Cyphera.Kmip.csproj": {
+                "projectPath": "/Users/lgutschow/workspace/_github/cyphera-labs/kmip-dotnet/src/Cyphera.Kmip/Cyphera.Kmip.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "Microsoft.NET.Test.Sdk": {
+              "target": "Package",
+              "version": "[17.*, )"
+            },
+            "xunit": {
+              "target": "Package",
+              "version": "[2.*, )"
+            },
+            "xunit.runner.visualstudio": {
+              "target": "Package",
+              "version": "[2.*, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/8.0.100/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}
