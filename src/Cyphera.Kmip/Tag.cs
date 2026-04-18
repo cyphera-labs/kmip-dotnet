@@ -73,10 +73,12 @@ public static class KmipOperation
 /// <summary>KMIP object types.</summary>
 public static class KmipObjectType
 {
-    public const uint SymmetricKey = 0x00000001;
-    public const uint PublicKey    = 0x00000002;
-    public const uint PrivateKey   = 0x00000003;
-    public const uint Certificate  = 0x00000006;
+    public const uint Certificate  = 0x00000001;
+    public const uint SymmetricKey = 0x00000002;
+    public const uint PublicKey    = 0x00000003;
+    public const uint PrivateKey   = 0x00000004;
+    public const uint SplitKey     = 0x00000005;
+    public const uint Template     = 0x00000006;
     public const uint SecretData   = 0x00000007;
     public const uint OpaqueData   = 0x00000008;
 }
