@@ -43,17 +43,45 @@ public class ObjectTypeTests
 }
 
 // ---------------------------------------------------------------------------
-// Operation values -- KMIP 1.4 Section 9.1.3.2.2
+// Operation values -- all 27 KMIP 1.4 operations
 // ---------------------------------------------------------------------------
 
 public class OperationTests
 {
-    [Fact] public void Create()   => Assert.Equal(0x00000001u, KmipOperation.Create);
-    [Fact] public void Locate()   => Assert.Equal(0x00000008u, KmipOperation.Locate);
-    [Fact] public void Get()      => Assert.Equal(0x0000000Au, KmipOperation.Get);
-    [Fact] public void Activate() => Assert.Equal(0x00000012u, KmipOperation.Activate);
-    [Fact] public void Destroy()  => Assert.Equal(0x00000014u, KmipOperation.Destroy);
-    [Fact] public void Check()    => Assert.Equal(0x00000009u, KmipOperation.Check);
+    [Fact] public void Create()           => Assert.Equal(0x00000001u, KmipOperation.Create);
+    [Fact] public void CreateKeyPair()    => Assert.Equal(0x00000002u, KmipOperation.CreateKeyPair);
+    [Fact] public void Register()         => Assert.Equal(0x00000003u, KmipOperation.Register);
+    [Fact] public void ReKey()            => Assert.Equal(0x00000004u, KmipOperation.ReKey);
+    [Fact] public void DeriveKey()        => Assert.Equal(0x00000005u, KmipOperation.DeriveKey);
+    [Fact] public void Locate()           => Assert.Equal(0x00000008u, KmipOperation.Locate);
+    [Fact] public void Check()            => Assert.Equal(0x00000009u, KmipOperation.Check);
+    [Fact] public void Get()              => Assert.Equal(0x0000000Au, KmipOperation.Get);
+    [Fact] public void GetAttributes()    => Assert.Equal(0x0000000Bu, KmipOperation.GetAttributes);
+    [Fact] public void GetAttributeList() => Assert.Equal(0x0000000Cu, KmipOperation.GetAttributeList);
+    [Fact] public void AddAttribute()     => Assert.Equal(0x0000000Du, KmipOperation.AddAttribute);
+    [Fact] public void ModifyAttribute()  => Assert.Equal(0x0000000Eu, KmipOperation.ModifyAttribute);
+    [Fact] public void DeleteAttribute()  => Assert.Equal(0x0000000Fu, KmipOperation.DeleteAttribute);
+    [Fact] public void ObtainLease()      => Assert.Equal(0x00000010u, KmipOperation.ObtainLease);
+    [Fact] public void Activate()         => Assert.Equal(0x00000012u, KmipOperation.Activate);
+    [Fact] public void Revoke()           => Assert.Equal(0x00000013u, KmipOperation.Revoke);
+    [Fact] public void Destroy()          => Assert.Equal(0x00000014u, KmipOperation.Destroy);
+    [Fact] public void Archive()          => Assert.Equal(0x00000015u, KmipOperation.Archive);
+    [Fact] public void Recover()          => Assert.Equal(0x00000016u, KmipOperation.Recover);
+    [Fact] public void Query()            => Assert.Equal(0x00000018u, KmipOperation.Query);
+    [Fact] public void Poll()             => Assert.Equal(0x0000001Au, KmipOperation.Poll);
+    [Fact] public void DiscoverVersions() => Assert.Equal(0x0000001Eu, KmipOperation.DiscoverVersions);
+    [Fact] public void Encrypt()          => Assert.Equal(0x0000001Fu, KmipOperation.Encrypt);
+    [Fact] public void Decrypt()          => Assert.Equal(0x00000020u, KmipOperation.Decrypt);
+    [Fact] public void Sign()             => Assert.Equal(0x00000021u, KmipOperation.Sign);
+    [Fact] public void SignatureVerify()   => Assert.Equal(0x00000022u, KmipOperation.SignatureVerify);
+    [Fact] public void MAC()              => Assert.Equal(0x00000023u, KmipOperation.MAC);
+
+    [Fact]
+    public void Has27Operations()
+    {
+        var values = ConstantHelper.GetUIntConstants(typeof(KmipOperation));
+        Assert.Equal(27, values.Count);
+    }
 
     [Fact]
     public void NoDuplicateValues()

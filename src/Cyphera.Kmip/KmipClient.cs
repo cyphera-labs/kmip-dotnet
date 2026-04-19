@@ -10,6 +10,7 @@ namespace Cyphera.Kmip;
 
 /// <summary>
 /// KMIP client -- connects to any KMIP 1.4 server via mTLS.
+/// Supports all 27 KMIP 1.4 operations.
 ///
 /// Usage:
 ///   using var client = new KmipClient(new KmipClientOptions
@@ -49,6 +50,95 @@ public sealed class KmipClient : IDisposable
         }
     }
 
+    // -----------------------------------------------------------------------
+    // 1. Create
+    // -----------------------------------------------------------------------
+
+    /// <summary>Create a new symmetric key on the server.</summary>
+    public async Task<CreateResult> CreateAsync(
+        string name,
+        string? algorithm = null,
+        int length = 256,
+        CancellationToken ct = default)
+    {
+        uint algoEnum = ResolveAlgorithm(algorithm);
+        var request = Operations.BuildCreateRequest(name, algoEnum, length);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        return Operations.ParseCreatePayload(response.Payload!);
+    }
+
+    // -----------------------------------------------------------------------
+    // 2. CreateKeyPair
+    // -----------------------------------------------------------------------
+
+    /// <summary>Create a new asymmetric key pair on the server.</summary>
+    public async Task<CreateKeyPairResult> CreateKeyPairAsync(
+        string name,
+        uint algorithm,
+        int length,
+        CancellationToken ct = default)
+    {
+        var request = Operations.BuildCreateKeyPairRequest(name, algorithm, length);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        return Operations.ParseCreateKeyPairPayload(response.Payload!);
+    }
+
+    // -----------------------------------------------------------------------
+    // 3. Register
+    // -----------------------------------------------------------------------
+
+    /// <summary>Register existing key material on the server.</summary>
+    public async Task<CreateResult> RegisterAsync(
+        uint objectType,
+        byte[] material,
+        string name,
+        uint algorithm,
+        int length,
+        CancellationToken ct = default)
+    {
+        var request = Operations.BuildRegisterRequest(objectType, material, name, algorithm, length);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        return Operations.ParseCreatePayload(response.Payload!);
+    }
+
+    // -----------------------------------------------------------------------
+    // 4. ReKey
+    // -----------------------------------------------------------------------
+
+    /// <summary>Re-key an existing key on the server.</summary>
+    public async Task<ReKeyResult> ReKeyAsync(string uniqueId, CancellationToken ct = default)
+    {
+        var request = Operations.BuildReKeyRequest(uniqueId);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        return Operations.ParseReKeyPayload(response.Payload!);
+    }
+
+    // -----------------------------------------------------------------------
+    // 5. DeriveKey
+    // -----------------------------------------------------------------------
+
+    /// <summary>Derive a new key from an existing key.</summary>
+    public async Task<DeriveKeyResult> DeriveKeyAsync(
+        string uniqueId,
+        byte[] derivationData,
+        string name,
+        int length,
+        CancellationToken ct = default)
+    {
+        var request = Operations.BuildDeriveKeyRequest(uniqueId, derivationData, name, length);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        return Operations.ParseDeriveKeyPayload(response.Payload!);
+    }
+
+    // -----------------------------------------------------------------------
+    // 6. Locate
+    // -----------------------------------------------------------------------
+
     /// <summary>Locate keys by name.</summary>
     public async Task<List<string>> LocateAsync(string name, CancellationToken ct = default)
     {
@@ -57,6 +147,23 @@ public sealed class KmipClient : IDisposable
         var response = Operations.ParseResponse(responseData);
         return Operations.ParseLocatePayload(response.Payload!).UniqueIdentifiers;
     }
+
+    // -----------------------------------------------------------------------
+    // 7. Check
+    // -----------------------------------------------------------------------
+
+    /// <summary>Check the status of a managed object.</summary>
+    public async Task<CheckResult> CheckAsync(string uniqueId, CancellationToken ct = default)
+    {
+        var request = Operations.BuildCheckRequest(uniqueId);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        return Operations.ParseCheckPayload(response.Payload!);
+    }
+
+    // -----------------------------------------------------------------------
+    // 8. Get
+    // -----------------------------------------------------------------------
 
     /// <summary>Get key material by unique ID.</summary>
     public async Task<GetResult> GetAsync(string uniqueId, CancellationToken ct = default)
@@ -67,26 +174,256 @@ public sealed class KmipClient : IDisposable
         return Operations.ParseGetPayload(response.Payload!);
     }
 
-    /// <summary>Create a new symmetric key on the server.</summary>
-    public async Task<CreateResult> CreateAsync(
-        string name,
-        string? algorithm = null,
-        int length = 256,
-        CancellationToken ct = default)
+    // -----------------------------------------------------------------------
+    // 9. GetAttributes
+    // -----------------------------------------------------------------------
+
+    /// <summary>Fetch all attributes of a managed object.</summary>
+    public async Task<GetResult> GetAttributesAsync(string uniqueId, CancellationToken ct = default)
     {
-        uint algoEnum = algorithm?.ToUpperInvariant() switch
-        {
-            "AES" or null => KmipAlgorithm.Aes,
-            "DES" => KmipAlgorithm.Des,
-            "TRIPLEDES" or "3DES" => KmipAlgorithm.TripleDes,
-            "RSA" => KmipAlgorithm.Rsa,
-            _ => KmipAlgorithm.Aes,
-        };
-        var request = Operations.BuildCreateRequest(name, algoEnum, length);
+        var request = Operations.BuildGetAttributesRequest(uniqueId);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseCreatePayload(response.Payload!);
+        return Operations.ParseGetPayload(response.Payload!);
     }
+
+    // -----------------------------------------------------------------------
+    // 10. GetAttributeList
+    // -----------------------------------------------------------------------
+
+    /// <summary>Fetch the list of attribute names for a managed object.</summary>
+    public async Task<List<string>> GetAttributeListAsync(string uniqueId, CancellationToken ct = default)
+    {
+        var request = Operations.BuildGetAttributeListRequest(uniqueId);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        if (response.Payload == null)
+            return new List<string>();
+        var attrs = Ttlv.FindChildren(response.Payload, Tag.AttributeName);
+        return attrs
+            .Where(a => a.TextValue != null)
+            .Select(a => a.TextValue!)
+            .ToList();
+    }
+
+    // -----------------------------------------------------------------------
+    // 11. AddAttribute
+    // -----------------------------------------------------------------------
+
+    /// <summary>Add an attribute to a managed object.</summary>
+    public async Task AddAttributeAsync(string uniqueId, string name, string value, CancellationToken ct = default)
+    {
+        var request = Operations.BuildAddAttributeRequest(uniqueId, name, value);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        Operations.ParseResponse(responseData);
+    }
+
+    // -----------------------------------------------------------------------
+    // 12. ModifyAttribute
+    // -----------------------------------------------------------------------
+
+    /// <summary>Modify an attribute of a managed object.</summary>
+    public async Task ModifyAttributeAsync(string uniqueId, string name, string value, CancellationToken ct = default)
+    {
+        var request = Operations.BuildModifyAttributeRequest(uniqueId, name, value);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        Operations.ParseResponse(responseData);
+    }
+
+    // -----------------------------------------------------------------------
+    // 13. DeleteAttribute
+    // -----------------------------------------------------------------------
+
+    /// <summary>Delete an attribute from a managed object.</summary>
+    public async Task DeleteAttributeAsync(string uniqueId, string name, CancellationToken ct = default)
+    {
+        var request = Operations.BuildDeleteAttributeRequest(uniqueId, name);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        Operations.ParseResponse(responseData);
+    }
+
+    // -----------------------------------------------------------------------
+    // 14. ObtainLease
+    // -----------------------------------------------------------------------
+
+    /// <summary>Obtain a lease for a managed object. Returns lease time in seconds.</summary>
+    public async Task<int> ObtainLeaseAsync(string uniqueId, CancellationToken ct = default)
+    {
+        var request = Operations.BuildObtainLeaseRequest(uniqueId);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        if (response.Payload == null)
+            return 0;
+        var lease = Ttlv.FindChild(response.Payload, Tag.LeaseTime);
+        return lease?.IntegerValue ?? 0;
+    }
+
+    // -----------------------------------------------------------------------
+    // 15. Activate
+    // -----------------------------------------------------------------------
+
+    /// <summary>Activate a key by unique ID.</summary>
+    public async Task ActivateAsync(string uniqueId, CancellationToken ct = default)
+    {
+        var request = Operations.BuildActivateRequest(uniqueId);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        Operations.ParseResponse(responseData);
+    }
+
+    // -----------------------------------------------------------------------
+    // 16. Revoke
+    // -----------------------------------------------------------------------
+
+    /// <summary>Revoke a managed object with the given reason code.</summary>
+    public async Task RevokeAsync(string uniqueId, uint reason, CancellationToken ct = default)
+    {
+        var request = Operations.BuildRevokeRequest(uniqueId, reason);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        Operations.ParseResponse(responseData);
+    }
+
+    // -----------------------------------------------------------------------
+    // 17. Destroy
+    // -----------------------------------------------------------------------
+
+    /// <summary>Destroy a key by unique ID.</summary>
+    public async Task DestroyAsync(string uniqueId, CancellationToken ct = default)
+    {
+        var request = Operations.BuildDestroyRequest(uniqueId);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        Operations.ParseResponse(responseData);
+    }
+
+    // -----------------------------------------------------------------------
+    // 18. Archive
+    // -----------------------------------------------------------------------
+
+    /// <summary>Archive a managed object.</summary>
+    public async Task ArchiveAsync(string uniqueId, CancellationToken ct = default)
+    {
+        var request = Operations.BuildArchiveRequest(uniqueId);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        Operations.ParseResponse(responseData);
+    }
+
+    // -----------------------------------------------------------------------
+    // 19. Recover
+    // -----------------------------------------------------------------------
+
+    /// <summary>Recover an archived managed object.</summary>
+    public async Task RecoverAsync(string uniqueId, CancellationToken ct = default)
+    {
+        var request = Operations.BuildRecoverRequest(uniqueId);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        Operations.ParseResponse(responseData);
+    }
+
+    // -----------------------------------------------------------------------
+    // 20. Query
+    // -----------------------------------------------------------------------
+
+    /// <summary>Query the server for supported operations and object types.</summary>
+    public async Task<QueryResult> QueryAsync(CancellationToken ct = default)
+    {
+        var request = Operations.BuildQueryRequest();
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        return Operations.ParseQueryPayload(response.Payload!);
+    }
+
+    // -----------------------------------------------------------------------
+    // 21. Poll
+    // -----------------------------------------------------------------------
+
+    /// <summary>Poll the server.</summary>
+    public async Task PollAsync(CancellationToken ct = default)
+    {
+        var request = Operations.BuildPollRequest();
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        Operations.ParseResponse(responseData);
+    }
+
+    // -----------------------------------------------------------------------
+    // 22. DiscoverVersions
+    // -----------------------------------------------------------------------
+
+    /// <summary>Discover the KMIP versions supported by the server.</summary>
+    public async Task<DiscoverVersionsResult> DiscoverVersionsAsync(CancellationToken ct = default)
+    {
+        var request = Operations.BuildDiscoverVersionsRequest();
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        return Operations.ParseDiscoverVersionsPayload(response.Payload!);
+    }
+
+    // -----------------------------------------------------------------------
+    // 23. Encrypt
+    // -----------------------------------------------------------------------
+
+    /// <summary>Encrypt data using a managed key.</summary>
+    public async Task<EncryptResult> EncryptAsync(string uniqueId, byte[] data, CancellationToken ct = default)
+    {
+        var request = Operations.BuildEncryptRequest(uniqueId, data);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        return Operations.ParseEncryptPayload(response.Payload!);
+    }
+
+    // -----------------------------------------------------------------------
+    // 24. Decrypt
+    // -----------------------------------------------------------------------
+
+    /// <summary>Decrypt data using a managed key.</summary>
+    public async Task<DecryptResult> DecryptAsync(string uniqueId, byte[] data, byte[]? nonce = null, CancellationToken ct = default)
+    {
+        var request = Operations.BuildDecryptRequest(uniqueId, data, nonce);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        return Operations.ParseDecryptPayload(response.Payload!);
+    }
+
+    // -----------------------------------------------------------------------
+    // 25. Sign
+    // -----------------------------------------------------------------------
+
+    /// <summary>Sign data using a managed key.</summary>
+    public async Task<SignResult> SignAsync(string uniqueId, byte[] data, CancellationToken ct = default)
+    {
+        var request = Operations.BuildSignRequest(uniqueId, data);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        return Operations.ParseSignPayload(response.Payload!);
+    }
+
+    // -----------------------------------------------------------------------
+    // 26. SignatureVerify
+    // -----------------------------------------------------------------------
+
+    /// <summary>Verify a signature using a managed key.</summary>
+    public async Task<SignatureVerifyResult> SignatureVerifyAsync(string uniqueId, byte[] data, byte[] signature, CancellationToken ct = default)
+    {
+        var request = Operations.BuildSignatureVerifyRequest(uniqueId, data, signature);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        return Operations.ParseSignatureVerifyPayload(response.Payload!);
+    }
+
+    // -----------------------------------------------------------------------
+    // 27. MAC
+    // -----------------------------------------------------------------------
+
+    /// <summary>Compute a MAC using a managed key.</summary>
+    public async Task<MacResult> MacAsync(string uniqueId, byte[] data, CancellationToken ct = default)
+    {
+        var request = Operations.BuildMacRequest(uniqueId, data);
+        var responseData = await SendAsync(request, ct).ConfigureAwait(false);
+        var response = Operations.ParseResponse(responseData);
+        return Operations.ParseMacPayload(response.Payload!);
+    }
+
+    // -----------------------------------------------------------------------
+    // Convenience methods
+    // -----------------------------------------------------------------------
 
     /// <summary>Convenience: locate by name + get material in one call.</summary>
     public async Task<byte[]> FetchKeyAsync(string name, CancellationToken ct = default)
@@ -101,6 +438,33 @@ public sealed class KmipClient : IDisposable
 
         return result.KeyMaterial;
     }
+
+    // -----------------------------------------------------------------------
+    // Algorithm resolution
+    // -----------------------------------------------------------------------
+
+    /// <summary>Convert an algorithm name string to its KMIP enum value.</summary>
+    public static uint ResolveAlgorithm(string? name)
+    {
+        return name?.ToUpperInvariant() switch
+        {
+            "AES" or null => KmipAlgorithm.Aes,
+            "DES" => KmipAlgorithm.Des,
+            "TRIPLEDES" or "3DES" => KmipAlgorithm.TripleDes,
+            "RSA" => KmipAlgorithm.Rsa,
+            "DSA" => KmipAlgorithm.Dsa,
+            "ECDSA" => KmipAlgorithm.Ecdsa,
+            "HMACSHA1" => KmipAlgorithm.HmacSha1,
+            "HMACSHA256" => KmipAlgorithm.HmacSha256,
+            "HMACSHA384" => KmipAlgorithm.HmacSha384,
+            "HMACSHA512" => KmipAlgorithm.HmacSha512,
+            _ => KmipAlgorithm.Aes,
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // Connection / transport
+    // -----------------------------------------------------------------------
 
     /// <summary>Close the TLS connection.</summary>
     public void Dispose()

@@ -5,7 +5,6 @@ namespace Cyphera.Kmip;
 
 /// <summary>
 /// KMIP 1.4 tag, type, and enum constants.
-/// Only the subset needed for Locate, Get, Create operations.
 ///
 /// Reference: OASIS KMIP Specification v1.4
 /// https://docs.oasis-open.org/kmip/spec/v1.4/kmip-spec-v1.4.html
@@ -57,17 +56,74 @@ public static class Tag
 
     // Template
     public const uint TemplateAttribute    = 0x420091;
+
+    // Key pair
+    public const uint PrivateKeyUniqueIdentifier = 0x420066;
+    public const uint PublicKeyUniqueIdentifier   = 0x42006F;
+    public const uint PublicKey                   = 0x42004E;
+    public const uint PrivateKey                  = 0x42004D;
+
+    // Certificate
+    public const uint Certificate      = 0x420021;
+    public const uint CertificateType  = 0x42001D;
+    public const uint CertificateValue = 0x42001E;
+
+    // Crypto operations
+    public const uint Data              = 0x420033;
+    public const uint IVCounterNonce    = 0x420047;
+    public const uint SignatureData     = 0x42004F;
+    public const uint MACData           = 0x420051;
+    public const uint ValidityIndicator = 0x420098;
+
+    // Revocation
+    public const uint RevocationReason     = 0x420082;
+    public const uint RevocationReasonCode = 0x420083;
+
+    // Query
+    public const uint QueryFunction = 0x420074;
+
+    // State
+    public const uint State = 0x42008D;
+
+    // Derivation
+    public const uint DerivationMethod     = 0x420031;
+    public const uint DerivationParameters = 0x420032;
+    public const uint DerivationData       = 0x420030;
+
+    // Lease
+    public const uint LeaseTime = 0x420049;
 }
 
-/// <summary>KMIP operation codes.</summary>
+/// <summary>KMIP operation codes (all 27 KMIP 1.4 operations).</summary>
 public static class KmipOperation
 {
-    public const uint Create   = 0x00000001;
-    public const uint Locate   = 0x00000008;
-    public const uint Get      = 0x0000000A;
-    public const uint Activate = 0x00000012;
-    public const uint Destroy  = 0x00000014;
-    public const uint Check    = 0x00000009;
+    public const uint Create           = 0x00000001;
+    public const uint CreateKeyPair    = 0x00000002;
+    public const uint Register         = 0x00000003;
+    public const uint ReKey            = 0x00000004;
+    public const uint DeriveKey        = 0x00000005;
+    public const uint Locate           = 0x00000008;
+    public const uint Check            = 0x00000009;
+    public const uint Get              = 0x0000000A;
+    public const uint GetAttributes    = 0x0000000B;
+    public const uint GetAttributeList = 0x0000000C;
+    public const uint AddAttribute     = 0x0000000D;
+    public const uint ModifyAttribute  = 0x0000000E;
+    public const uint DeleteAttribute  = 0x0000000F;
+    public const uint ObtainLease      = 0x00000010;
+    public const uint Activate         = 0x00000012;
+    public const uint Revoke           = 0x00000013;
+    public const uint Destroy          = 0x00000014;
+    public const uint Archive          = 0x00000015;
+    public const uint Recover          = 0x00000016;
+    public const uint Query            = 0x00000018;
+    public const uint Poll             = 0x0000001A;
+    public const uint DiscoverVersions = 0x0000001E;
+    public const uint Encrypt          = 0x0000001F;
+    public const uint Decrypt          = 0x00000020;
+    public const uint Sign             = 0x00000021;
+    public const uint SignatureVerify  = 0x00000022;
+    public const uint MAC              = 0x00000023;
 }
 
 /// <summary>KMIP object types.</summary>
