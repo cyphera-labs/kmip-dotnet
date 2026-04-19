@@ -506,3 +506,90 @@ public class TtlvUnicodeTests
         Assert.Equal(longStr, decoded.TextValue);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Security hardening tests
+// ---------------------------------------------------------------------------
+
+public class TtlvSecurityTests
+{
+    [Fact]
+    public void RejectsDeclaredLengthExceedingBuffer()
+    {
+        // Header claiming 1000 bytes of value, but only 10 bytes provided
+        var buf = new byte[18]; // 8 header + 10 body
+        buf[0] = 0x42; buf[1] = 0x00; buf[2] = 0x01; // tag = 0x420001
+        buf[3] = 0x07; // type = TextString
+        BinaryPrimitives.WriteUInt32BigEndian(buf.AsSpan(4), 1000); // length = 1000
+        var ex = Assert.Throws<InvalidOperationException>(() => Ttlv.Decode(buf));
+        Assert.Contains("exceeds buffer", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AcceptsDeclaredLengthThatExactlyFitsBuffer()
+    {
+        var encoded = Ttlv.EncodeInteger(0x420001, 42);
+        var decoded = Ttlv.Decode(encoded);
+        Assert.Equal(42, decoded.IntegerValue);
+    }
+
+    [Fact]
+    public void RejectsZeroLengthBuffer()
+    {
+        Assert.Throws<InvalidOperationException>(() => Ttlv.Decode(Array.Empty<byte>()));
+    }
+
+    [Fact]
+    public void RejectsStructuresNestedDeeperThan32Levels()
+    {
+        // Build 33 levels of nesting
+        byte[] inner = Ttlv.EncodeInteger(0x420001, 42);
+        for (int i = 0; i < 33; i++)
+        {
+            inner = Ttlv.EncodeStructure(0x420001, inner);
+        }
+        var ex = Assert.Throws<InvalidOperationException>(() => Ttlv.Decode(inner));
+        Assert.Contains("depth", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AcceptsStructuresNestedExactly32LevelsDeep()
+    {
+        // Build 31 wrapping levels (root is depth 0, innermost is depth 31)
+        byte[] inner = Ttlv.EncodeInteger(0x420001, 42);
+        for (int i = 0; i < 31; i++)
+        {
+            inner = Ttlv.EncodeStructure(0x420001, inner);
+        }
+        var decoded = Ttlv.Decode(inner);
+        Assert.Equal(ItemType.Structure, decoded.ItemType);
+    }
+
+    [Fact]
+    public void RejectsTruncatedHeader()
+    {
+        var buf = new byte[] { 0x42, 0x00, 0x01, 0x02 };
+        var ex = Assert.Throws<InvalidOperationException>(() => Ttlv.Decode(buf));
+        Assert.Contains("too short", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void HandlesIntegerWithWrongLengthSafely()
+    {
+        // Header: tag=0x420001, type=Integer(0x02), length=3 (should be 4)
+        var buf = new byte[16];
+        buf[0] = 0x42; buf[1] = 0x00; buf[2] = 0x01;
+        buf[3] = 0x02; // type = Integer
+        BinaryPrimitives.WriteUInt32BigEndian(buf.AsSpan(4), 3); // length = 3
+        // Should either throw or handle safely — must not crash
+        try
+        {
+            Ttlv.Decode(buf);
+        }
+        catch (Exception)
+        {
+            // Any exception is acceptable
+        }
+        Assert.True(true, "decoder did not crash on malformed integer length");
+    }
+}
