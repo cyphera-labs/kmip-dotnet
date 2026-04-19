@@ -150,9 +150,20 @@ public static class Ttlv
         return Encode(tag, Cyphera.Kmip.ItemType.DateTime, buf);
     }
 
+    /// <summary>Maximum nesting depth for TTLV structures.</summary>
+    private const int MaxDecodeDepth = 32;
+
     /// <summary>Decode a TTLV buffer into a parsed item.</summary>
     public static TtlvItem Decode(ReadOnlySpan<byte> buf, int offset = 0)
     {
+        return DecodeDepth(buf, offset, 0);
+    }
+
+    private static TtlvItem DecodeDepth(ReadOnlySpan<byte> buf, int offset, int depth)
+    {
+        if (depth > MaxDecodeDepth)
+            throw new InvalidOperationException("TTLV: maximum nesting depth exceeded");
+
         if (buf.Length - offset < 8)
             throw new InvalidOperationException("TTLV buffer too short for header");
 
@@ -163,6 +174,11 @@ public static class Ttlv
         int totalLength = 8 + padded;
         int valueStart = offset + 8;
 
+        // Bounds check: ensure declared length fits within buffer.
+        if (valueStart + padded > buf.Length)
+            throw new InvalidOperationException(
+                $"TTLV: declared length {length} exceeds buffer (have {buf.Length - valueStart} bytes)");
+
         switch (type)
         {
             case Cyphera.Kmip.ItemType.Structure:
@@ -172,7 +188,7 @@ public static class Ttlv
                 int end = valueStart + length;
                 while (pos < end)
                 {
-                    var child = Decode(buf, pos);
+                    var child = DecodeDepth(buf, pos, depth + 1);
                     children.Add(child);
                     pos += child.TotalLength;
                 }

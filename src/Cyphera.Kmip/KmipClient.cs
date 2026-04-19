@@ -26,11 +26,15 @@ namespace Cyphera.Kmip;
 /// </summary>
 public sealed class KmipClient : IDisposable
 {
+    /// <summary>Maximum KMIP response size (16MB).</summary>
+    private const int MaxResponseSize = 16 * 1024 * 1024;
+
     private readonly string _host;
     private readonly int _port;
     private readonly TimeSpan _timeout;
     private readonly X509Certificate2 _clientCert;
     private readonly X509Certificate2Collection? _caCerts;
+    private readonly bool _insecureSkipVerify;
     private TcpClient? _tcpClient;
     private SslStream? _sslStream;
 
@@ -40,6 +44,7 @@ public sealed class KmipClient : IDisposable
         _host = options.Host;
         _port = options.Port;
         _timeout = TimeSpan.FromMilliseconds(options.TimeoutMs);
+        _insecureSkipVerify = options.InsecureSkipVerify;
 
         _clientCert = LoadClientCertificate(options.ClientCert, options.ClientKey);
 
@@ -481,21 +486,62 @@ public sealed class KmipClient : IDisposable
     {
         var stream = await ConnectAsync(ct).ConfigureAwait(false);
 
-        await stream.WriteAsync(request, ct).ConfigureAwait(false);
-        await stream.FlushAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await stream.WriteAsync(request, ct).ConfigureAwait(false);
+            await stream.FlushAsync(ct).ConfigureAwait(false);
+        }
+        catch (IOException)
+        {
+            MarkStale(); // Mark connection as stale.
+            throw;
+        }
 
         // Read the TTLV header (8 bytes) to determine total length
         var header = new byte[8];
-        await ReadExactAsync(stream, header, ct).ConfigureAwait(false);
+        try
+        {
+            await ReadExactAsync(stream, header, ct).ConfigureAwait(false);
+        }
+        catch (IOException)
+        {
+            MarkStale(); // Mark connection as stale.
+            throw;
+        }
 
         uint valueLength = (uint)((header[4] << 24) | (header[5] << 16) | (header[6] << 8) | header[7]);
-        int totalLength = 8 + (int)valueLength;
 
+        // Validate response size before allocating.
+        if (valueLength > MaxResponseSize)
+        {
+            MarkStale();
+            throw new IOException(
+                $"KMIP: response too large ({valueLength} bytes, max {MaxResponseSize})");
+        }
+
+        int totalLength = 8 + (int)valueLength;
         var buf = new byte[totalLength];
         Array.Copy(header, buf, 8);
-        await ReadExactAsync(stream, buf.AsMemory(8), ct).ConfigureAwait(false);
+        try
+        {
+            await ReadExactAsync(stream, buf.AsMemory(8), ct).ConfigureAwait(false);
+        }
+        catch (IOException)
+        {
+            MarkStale(); // Mark connection as stale.
+            throw;
+        }
 
         return buf;
+    }
+
+    /// <summary>Mark the current connection as stale so the next call reconnects.</summary>
+    private void MarkStale()
+    {
+        _sslStream?.Dispose();
+        _sslStream = null;
+        _tcpClient?.Dispose();
+        _tcpClient = null;
     }
 
     /// <summary>Establish or reuse the mTLS connection.</summary>
@@ -513,16 +559,18 @@ public sealed class KmipClient : IDisposable
 
         await _tcpClient.ConnectAsync(_host, _port, cts.Token).ConfigureAwait(false);
 
+        // Only disable certificate validation if explicitly opted in via InsecureSkipVerify.
+        // When no CA cert is provided, the system certificate store is used by default.
+        RemoteCertificateValidationCallback? validationCallback = null;
+        if (_insecureSkipVerify)
+        {
+            validationCallback = (sender, certificate, chain, errors) => true;
+        }
+
         _sslStream = new SslStream(
             _tcpClient.GetStream(),
             leaveInnerStreamOpen: false,
-            (sender, certificate, chain, errors) =>
-            {
-                if (_caCerts == null) return true;
-                // Validate using provided CA
-                return errors == SslPolicyErrors.None
-                    || errors == SslPolicyErrors.RemoteCertificateChainErrors;
-            });
+            validationCallback);
 
         var authOptions = new SslClientAuthenticationOptions
         {
@@ -571,9 +619,12 @@ public sealed class KmipClientOptions
     /// <summary>Path to client private key PEM file.</summary>
     public required string ClientKey { get; init; }
 
-    /// <summary>Optional path to CA certificate PEM file.</summary>
+    /// <summary>Optional path to CA certificate PEM file (uses system roots if not set).</summary>
     public string? CaCert { get; init; }
 
     /// <summary>Connection timeout in milliseconds (default 10000).</summary>
     public int TimeoutMs { get; init; } = 10000;
+
+    /// <summary>DANGER: disables server certificate verification (default false).</summary>
+    public bool InsecureSkipVerify { get; init; } = false;
 }
