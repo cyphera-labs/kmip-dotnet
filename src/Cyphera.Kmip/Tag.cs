@@ -170,9 +170,11 @@ public static class KmipAlgorithm
     public const uint Dsa        = 0x00000005;
     public const uint Ecdsa      = 0x00000006;
     public const uint HmacSha1   = 0x00000007;
-    public const uint HmacSha256 = 0x00000008;
-    public const uint HmacSha384 = 0x00000009;
-    public const uint HmacSha512 = 0x0000000A;
+    public const uint HmacSha224 = 0x00000008;
+    public const uint HmacSha256 = 0x00000009;
+    public const uint HmacSha384 = 0x0000000A;
+    public const uint HmacSha512 = 0x0000000B;
+    public const uint HmacMd5    = 0x0000000C;
 }
 
 /// <summary>KMIP name types.</summary>
@@ -192,6 +194,8 @@ public static class KmipUsageMask
     public const uint WrapKey      = 0x00000010;
     public const uint UnwrapKey    = 0x00000020;
     public const uint Export       = 0x00000040;
-    public const uint DeriveKey    = 0x00000100;
+    public const uint MacGenerate  = 0x00000080;
+    public const uint MacVerify    = 0x00000100;
+    public const uint DeriveKey    = 0x00000200;
     public const uint KeyAgreement = 0x00000800;
 }

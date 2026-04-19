@@ -123,9 +123,11 @@ public class AlgorithmTests
     [Fact] public void Dsa()        => Assert.Equal(0x00000005u, KmipAlgorithm.Dsa);
     [Fact] public void Ecdsa()      => Assert.Equal(0x00000006u, KmipAlgorithm.Ecdsa);
     [Fact] public void HmacSha1()   => Assert.Equal(0x00000007u, KmipAlgorithm.HmacSha1);
-    [Fact] public void HmacSha256() => Assert.Equal(0x00000008u, KmipAlgorithm.HmacSha256);
-    [Fact] public void HmacSha384() => Assert.Equal(0x00000009u, KmipAlgorithm.HmacSha384);
-    [Fact] public void HmacSha512() => Assert.Equal(0x0000000Au, KmipAlgorithm.HmacSha512);
+    [Fact] public void HmacSha224() => Assert.Equal(0x00000008u, KmipAlgorithm.HmacSha224);
+    [Fact] public void HmacSha256() => Assert.Equal(0x00000009u, KmipAlgorithm.HmacSha256);
+    [Fact] public void HmacSha384() => Assert.Equal(0x0000000Au, KmipAlgorithm.HmacSha384);
+    [Fact] public void HmacSha512() => Assert.Equal(0x0000000Bu, KmipAlgorithm.HmacSha512);
+    [Fact] public void HmacMd5()    => Assert.Equal(0x0000000Cu, KmipAlgorithm.HmacMd5);
 
     [Fact]
     public void NoDuplicateValues()
@@ -180,7 +182,9 @@ public class UsageMaskTests
     [Fact] public void WrapKey()      => Assert.Equal(0x00000010u, KmipUsageMask.WrapKey);
     [Fact] public void UnwrapKey()    => Assert.Equal(0x00000020u, KmipUsageMask.UnwrapKey);
     [Fact] public void Export()       => Assert.Equal(0x00000040u, KmipUsageMask.Export);
-    [Fact] public void DeriveKey()    => Assert.Equal(0x00000100u, KmipUsageMask.DeriveKey);
+    [Fact] public void MacGenerate()  => Assert.Equal(0x00000080u, KmipUsageMask.MacGenerate);
+    [Fact] public void MacVerify()    => Assert.Equal(0x00000100u, KmipUsageMask.MacVerify);
+    [Fact] public void DeriveKey()    => Assert.Equal(0x00000200u, KmipUsageMask.DeriveKey);
     [Fact] public void KeyAgreement() => Assert.Equal(0x00000800u, KmipUsageMask.KeyAgreement);
 
     [Fact]
