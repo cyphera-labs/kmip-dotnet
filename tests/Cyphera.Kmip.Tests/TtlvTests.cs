@@ -522,7 +522,7 @@ public class TtlvSecurityTests
         buf[3] = 0x07; // type = TextString
         BinaryPrimitives.WriteUInt32BigEndian(buf.AsSpan(4), 1000); // length = 1000
         var ex = Assert.Throws<InvalidOperationException>(() => Ttlv.Decode(buf));
-        Assert.Contains("exceeds buffer", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exceeds available data", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

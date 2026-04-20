@@ -169,15 +169,21 @@ public static class Ttlv
 
         uint tag = ((uint)buf[offset] << 16) | ((uint)buf[offset + 1] << 8) | buf[offset + 2];
         byte type = buf[offset + 3];
-        int length = (int)BinaryPrimitives.ReadUInt32BigEndian(buf.Slice(offset + 4));
+        uint rawLength = BinaryPrimitives.ReadUInt32BigEndian(buf.Slice(offset + 4));
+        // C1: Guard against uint→int overflow (MSB set → negative)
+        if (rawLength > int.MaxValue)
+            throw new InvalidOperationException($"TTLV: length overflow ({rawLength})");
+        // H4: Reject negative after cast
+        int length = (int)rawLength;
+        if (length < 0)
+            throw new InvalidOperationException("TTLV: negative length after cast");
         int padded = PadTo8(length);
         int totalLength = 8 + padded;
         int valueStart = offset + 8;
 
-        // Bounds check: ensure declared length fits within buffer.
+        // Bounds check: generic message (no buffer geometry leak)
         if (valueStart + padded > buf.Length)
-            throw new InvalidOperationException(
-                $"TTLV: declared length {length} exceeds buffer (have {buf.Length - valueStart} bytes)");
+            throw new InvalidOperationException("TTLV: declared length exceeds available data");
 
         switch (type)
         {
@@ -191,6 +197,12 @@ public static class Ttlv
                     var child = DecodeDepth(buf, pos, depth + 1);
                     children.Add(child);
                     pos += child.TotalLength;
+                    // H5: Guard against child overrunning structure
+                    if (pos > end)
+                        throw new InvalidOperationException("TTLV: child overruns structure boundary");
+                    // M1: Cap child count to prevent memory exhaustion
+                    if (children.Count > 10_000)
+                        throw new InvalidOperationException("TTLV: structure child count limit exceeded");
                 }
                 return new TtlvItem
                 {
@@ -199,6 +211,9 @@ public static class Ttlv
                 };
             }
             case Cyphera.Kmip.ItemType.Integer:
+                // M2: Validate fixed-size type length
+                if (length != 4)
+                    throw new InvalidOperationException($"TTLV: Integer requires length=4, got {length}");
                 return new TtlvItem
                 {
                     Tag = tag, ItemType = type, Length = length,
@@ -206,6 +221,8 @@ public static class Ttlv
                     IntegerValue = BinaryPrimitives.ReadInt32BigEndian(buf.Slice(valueStart)),
                 };
             case Cyphera.Kmip.ItemType.LongInteger:
+                if (length != 8)
+                    throw new InvalidOperationException($"TTLV: LongInteger requires length=8, got {length}");
                 return new TtlvItem
                 {
                     Tag = tag, ItemType = type, Length = length,
@@ -213,6 +230,8 @@ public static class Ttlv
                     LongIntegerValue = BinaryPrimitives.ReadInt64BigEndian(buf.Slice(valueStart)),
                 };
             case Cyphera.Kmip.ItemType.Enumeration:
+                if (length != 4)
+                    throw new InvalidOperationException($"TTLV: Enumeration requires length=4, got {length}");
                 return new TtlvItem
                 {
                     Tag = tag, ItemType = type, Length = length,
@@ -220,6 +239,8 @@ public static class Ttlv
                     EnumValue = BinaryPrimitives.ReadUInt32BigEndian(buf.Slice(valueStart)),
                 };
             case Cyphera.Kmip.ItemType.Boolean:
+                if (length != 8)
+                    throw new InvalidOperationException($"TTLV: Boolean requires length=8, got {length}");
                 return new TtlvItem
                 {
                     Tag = tag, ItemType = type, Length = length,
