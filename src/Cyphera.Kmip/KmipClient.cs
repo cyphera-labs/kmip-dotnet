@@ -4,6 +4,7 @@
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Cyphera.Kmip;
@@ -24,7 +25,8 @@ namespace Cyphera.Kmip;
 ///   var key = await client.FetchKeyAsync("my-key-name");
 ///   // key is a byte[] of raw key bytes
 /// </summary>
-public sealed class KmipClient : IDisposable
+/// <remarks>Thread-safe. All operations are serialized via an internal semaphore.</remarks>
+public sealed class KmipClient : IDisposable, IAsyncDisposable
 {
     /// <summary>Maximum KMIP response size (16MB).</summary>
     private const int MaxResponseSize = 16 * 1024 * 1024;
@@ -34,7 +36,14 @@ public sealed class KmipClient : IDisposable
     private readonly TimeSpan _timeout;
     private readonly X509Certificate2 _clientCert;
     private readonly X509Certificate2Collection? _caCerts;
+    private readonly string? _pinnedCertificateThumbprint;
+    private readonly SemaphoreSlim _lock = new(1, 1);
+
+#if DEBUG
+#warning InsecureSkipVerify is available in DEBUG builds only — never ship with certificate validation disabled.
     private readonly bool _insecureSkipVerify;
+#endif
+
     private TcpClient? _tcpClient;
     private SslStream? _sslStream;
 
@@ -44,7 +53,11 @@ public sealed class KmipClient : IDisposable
         _host = options.Host;
         _port = options.Port;
         _timeout = TimeSpan.FromMilliseconds(options.TimeoutMs);
+        _pinnedCertificateThumbprint = options.PinnedCertificateThumbprint;
+
+#if DEBUG
         _insecureSkipVerify = options.InsecureSkipVerify;
+#endif
 
         _clientCert = LoadClientCertificate(options.ClientCert, options.ClientKey);
 
@@ -66,11 +79,16 @@ public sealed class KmipClient : IDisposable
         int length = 256,
         CancellationToken ct = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (length <= 0)
+            throw new ArgumentOutOfRangeException(nameof(length), length, "Key length must be greater than zero.");
+
         uint algoEnum = ResolveAlgorithm(algorithm);
         var request = Operations.BuildCreateRequest(name, algoEnum, length);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseCreatePayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseCreatePayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -87,7 +105,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildCreateKeyPairRequest(name, algorithm, length);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseCreateKeyPairPayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseCreateKeyPairPayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -106,7 +125,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildRegisterRequest(objectType, material, name, algorithm, length);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseCreatePayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseCreatePayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -119,7 +139,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildReKeyRequest(uniqueId);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseReKeyPayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseReKeyPayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -137,7 +158,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildDeriveKeyRequest(uniqueId, derivationData, name, length);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseDeriveKeyPayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseDeriveKeyPayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -150,7 +172,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildLocateRequest(name);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseLocatePayload(response.Payload!).UniqueIdentifiers;
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseLocatePayload(payload).UniqueIdentifiers;
     }
 
     // -----------------------------------------------------------------------
@@ -163,7 +186,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildCheckRequest(uniqueId);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseCheckPayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseCheckPayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -176,7 +200,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildGetRequest(uniqueId);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseGetPayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseGetPayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -189,7 +214,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildGetAttributesRequest(uniqueId);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseGetPayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseGetPayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -333,7 +359,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildQueryRequest();
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseQueryPayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseQueryPayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -358,7 +385,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildDiscoverVersionsRequest();
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseDiscoverVersionsPayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseDiscoverVersionsPayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -371,7 +399,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildEncryptRequest(uniqueId, data);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseEncryptPayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseEncryptPayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -384,7 +413,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildDecryptRequest(uniqueId, data, nonce);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseDecryptPayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseDecryptPayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -397,7 +427,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildSignRequest(uniqueId, data);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseSignPayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseSignPayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -410,7 +441,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildSignatureVerifyRequest(uniqueId, data, signature);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseSignatureVerifyPayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseSignatureVerifyPayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -423,7 +455,8 @@ public sealed class KmipClient : IDisposable
         var request = Operations.BuildMacRequest(uniqueId, data);
         var responseData = await SendAsync(request, ct).ConfigureAwait(false);
         var response = Operations.ParseResponse(responseData);
-        return Operations.ParseMacPayload(response.Payload!);
+        var payload = response.Payload ?? throw new KmipException("Server returned no payload");
+        return Operations.ParseMacPayload(payload);
     }
 
     // -----------------------------------------------------------------------
@@ -433,6 +466,8 @@ public sealed class KmipClient : IDisposable
     /// <summary>Convenience: locate by name + get material in one call.</summary>
     public async Task<byte[]> FetchKeyAsync(string name, CancellationToken ct = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
         var ids = await LocateAsync(name, ct).ConfigureAwait(false);
         if (ids.Count == 0)
             throw new KmipException($"KMIP: no key found with name \"{name}\"");
@@ -479,60 +514,88 @@ public sealed class KmipClient : IDisposable
         _tcpClient?.Dispose();
         _tcpClient = null;
         _clientCert.Dispose();
+        _lock.Dispose();
+    }
+
+    /// <summary>Asynchronously close the TLS connection.</summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (_sslStream != null)
+        {
+            await _sslStream.DisposeAsync().ConfigureAwait(false);
+            _sslStream = null;
+        }
+
+        if (_tcpClient != null)
+        {
+            _tcpClient.Dispose();
+            _tcpClient = null;
+        }
+
+        _clientCert.Dispose();
+        _lock.Dispose();
     }
 
     /// <summary>Send a KMIP request and receive the response.</summary>
     private async Task<byte[]> SendAsync(byte[] request, CancellationToken ct)
     {
-        var stream = await ConnectAsync(ct).ConfigureAwait(false);
-
+        await _lock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await stream.WriteAsync(request, ct).ConfigureAwait(false);
-            await stream.FlushAsync(ct).ConfigureAwait(false);
-        }
-        catch (IOException)
-        {
-            MarkStale(); // Mark connection as stale.
-            throw;
-        }
+            var stream = await ConnectAsync(ct).ConfigureAwait(false);
 
-        // Read the TTLV header (8 bytes) to determine total length
-        var header = new byte[8];
-        try
-        {
-            await ReadExactAsync(stream, header, ct).ConfigureAwait(false);
-        }
-        catch (IOException)
-        {
-            MarkStale(); // Mark connection as stale.
-            throw;
-        }
+            try
+            {
+                await stream.WriteAsync(request, ct).ConfigureAwait(false);
+                await stream.FlushAsync(ct).ConfigureAwait(false);
+            }
+            catch (IOException)
+            {
+                MarkStale(); // Mark connection as stale.
+                throw;
+            }
 
-        uint valueLength = (uint)((header[4] << 24) | (header[5] << 16) | (header[6] << 8) | header[7]);
+            // Read the TTLV header (8 bytes) to determine total length
+            var header = new byte[8];
+            try
+            {
+                await ReadExactAsync(stream, header, ct).ConfigureAwait(false);
+            }
+            catch (IOException)
+            {
+                MarkStale(); // Mark connection as stale.
+                throw;
+            }
 
-        // Validate response size before allocating.
-        if (valueLength > MaxResponseSize)
-        {
-            MarkStale();
-            throw new IOException(
-                $"KMIP: response too large ({valueLength} bytes, max {MaxResponseSize})");
-        }
+            uint valueLength = (uint)((header[4] << 24) | (header[5] << 16) | (header[6] << 8) | header[7]);
 
-        int totalLength = 8 + (int)valueLength;
-        var buf = new byte[totalLength];
-        Array.Copy(header, buf, 8);
-        try
-        {
-            await ReadExactAsync(stream, buf.AsMemory(8), ct).ConfigureAwait(false);
-        }
-        catch (IOException)
-        {
-            MarkStale(); // Mark connection as stale.
-            throw;
-        }
+            // Validate response size before allocating.
+            if (valueLength > MaxResponseSize)
+            {
+                MarkStale();
+                throw new IOException(
+                    $"KMIP: response too large ({valueLength} bytes, max {MaxResponseSize})");
+            }
 
-        return buf;
+            int totalLength = 8 + (int)valueLength;
+            var buf = new byte[totalLength];
+            Array.Copy(header, buf, 8);
+            try
+            {
+                await ReadExactAsync(stream, buf.AsMemory(8), ct).ConfigureAwait(false);
+            }
+            catch (IOException)
+            {
+                MarkStale(); // Mark connection as stale.
+                throw;
+            }
+
+            return buf;
+        }
+        finally
+        {
+            _lock.Release();
+        }
     }
 
     /// <summary>Mark the current connection as stale so the next call reconnects.</summary>
@@ -559,12 +622,28 @@ public sealed class KmipClient : IDisposable
 
         await _tcpClient.ConnectAsync(_host, _port, cts.Token).ConfigureAwait(false);
 
+        RemoteCertificateValidationCallback? validationCallback = null;
+
+#if DEBUG
         // Only disable certificate validation if explicitly opted in via InsecureSkipVerify.
         // When no CA cert is provided, the system certificate store is used by default.
-        RemoteCertificateValidationCallback? validationCallback = null;
         if (_insecureSkipVerify)
         {
             validationCallback = (sender, certificate, chain, errors) => true;
+        }
+        else
+#endif
+        if (_pinnedCertificateThumbprint != null)
+        {
+            var expected = _pinnedCertificateThumbprint;
+            validationCallback = (sender, certificate, chain, errors) =>
+            {
+                if (certificate == null) return false;
+                using var sha256 = SHA256.Create();
+                var hash = sha256.ComputeHash(certificate.GetRawCertData());
+                var thumbprint = Convert.ToHexString(hash);
+                return string.Equals(thumbprint, expected, StringComparison.OrdinalIgnoreCase);
+            };
         }
 
         _sslStream = new SslStream(
@@ -625,6 +704,11 @@ public sealed class KmipClientOptions
     /// <summary>Connection timeout in milliseconds (default 10000).</summary>
     public int TimeoutMs { get; init; } = 10000;
 
-    /// <summary>DANGER: disables server certificate verification (default false).</summary>
+    /// <summary>Optional SHA-256 thumbprint (hex) of the expected server certificate for cert pinning.</summary>
+    public string? PinnedCertificateThumbprint { get; init; }
+
+#if DEBUG
+    /// <summary>DANGER: disables server certificate verification (default false). DEBUG builds only.</summary>
     public bool InsecureSkipVerify { get; init; } = false;
+#endif
 }
